@@ -70,16 +70,16 @@ def _log_results(file_path: str, ghg_emissions_data: Dict[str, str]):
       print(f'{sector}\t{company}\t{category}\t{year}\t{val}')
 
 
-def _parse_extracted_rows(
-    rows: List[Dict[str, str]]) -> Tuple[bool, Dict[str, str]]:
-  """Check if the row has year and numerical GHG emissions data."""
+def _parse_extracted_cols(
+    cols: List[Dict[str, str]]) -> Tuple[bool, Dict[str, str]]:
+  """Check if the cells contain the year and numerical GHG emissions data."""
   has_numeric_value = False
   has_year_key = False
   category = 'NO_CATEGORY'
   ordered_data = collections.OrderedDict()
   ghg_emissions_data = {}
 
-  for item in rows:
+  for item in cols:
     field_value = item['fieldValue'].replace(',', '')
     if field_value.isdigit() or _is_number(field_value):
       has_numeric_value = True
@@ -87,7 +87,7 @@ def _parse_extracted_rows(
         has_year_key = True
         break
   if has_numeric_value and has_year_key:
-    for i, item in enumerate(rows):
+    for i, item in enumerate(cols):
       if is_year_column(item['fieldName']):
         ordered_data[item['fieldName']] = item['fieldValue']
       elif item['fieldName'] == 'NO_COL_HEADER' and i == 0:
@@ -95,7 +95,7 @@ def _parse_extracted_rows(
     ghg_emissions_data[category] = ordered_data
   elif has_numeric_value and not has_year_key:
     print('has numeric value but no year: ')
-    pp.pprint(rows)
+    pp.pprint(cols)
 
   return has_numeric_value, ghg_emissions_data
 
@@ -113,21 +113,21 @@ def process_tabular_data(document: documentai.Document, file_path: str,
         cols.append(_get_cell_text(cell, text))
 
       for row in table.body_rows:
-        extracted_rows = []
+        extracted_cols = []
         for i, cell in enumerate(row.cells):
           cell_text = _get_cell_text(row.cells[i], text)
           if _has_keyword(cell_text.lower(), keywords):
             has_any_keyword = True
 
           if cell_text:
-            extracted_rows.append({
+            extracted_cols.append({
                 'fieldValue': cell_text,
                 'fieldName': cols[i] if cols[i] else 'NO_COL_HEADER',
             })
 
         if has_any_keyword:
-          has_numeric_value, ghg_emissions_data = _parse_extracted_rows(
-              extracted_rows)
+          has_numeric_value, ghg_emissions_data = _parse_extracted_cols(
+              extracted_cols)
           _log_results(file_path, ghg_emissions_data)
           # The row had GHG emissions attributes (e.g Scope 1) but no numerical
           # value for the amount.
