@@ -35,9 +35,10 @@ def is_year_column(text: str) -> bool:
   return False
 
 
-def _has_keyword(text: str, keywords: List[str]) -> bool:
+def _get_matching_keywords(text: str, keywords: List[str]) -> List[str]:
   """Check if the cell value contains any of the keywords."""
-  return any(item in text.lower() for item in keywords)
+  # return any(item in text.lower() for item in keywords)
+  return [item for item in keywords if(item in text.lower())]
 
 
 def _get_cell_text(cell, text) -> str:
@@ -71,11 +72,11 @@ def _log_results(file_path: str, ghg_emissions_data: Dict[str, str]):
 
 
 def _parse_extracted_cols(
-    cols: List[Dict[str, str]]) -> Tuple[bool, Dict[str, str]]:
+    cols: List[Dict[str, str]], matching_keywords_str) -> Tuple[bool, Dict[str, str]]:
   """Check if the cells contain the year and numerical GHG emissions data."""
   has_numeric_value = False
   has_year_key = False
-  category = 'NO_CATEGORY'
+  category = matching_keywords_str
   ordered_data = collections.OrderedDict()
   ghg_emissions_data = {}
 
@@ -113,21 +114,26 @@ def process_tabular_data(document: documentai.Document, file_path: str,
         cols.append(_get_cell_text(cell, text))
 
       for row in table.body_rows:
+        has_any_keyword = False
         extracted_cols = []
+        matching_keywords_str = ""
         for i, cell in enumerate(row.cells):
           cell_text = _get_cell_text(row.cells[i], text)
-          if _has_keyword(cell_text.lower(), keywords):
+          matching_keywords = _get_matching_keywords(cell_text.lower(), keywords)
+          if matching_keywords:
+            matching_keywords_str = ", ".join(matching_keywords)
             has_any_keyword = True
 
           if cell_text:
             extracted_cols.append({
                 'fieldValue': cell_text,
-                'fieldName': cols[i] if cols[i] else 'NO_COL_HEADER',
+                'fieldName': cols[i] if cols[i] else "NO_CATEGORY",
             })
 
         if has_any_keyword:
+          # print("yes: ", extracted_cols)
           has_numeric_value, ghg_emissions_data = _parse_extracted_cols(
-              extracted_cols)
+              extracted_cols, matching_keywords_str)
           _log_results(file_path, ghg_emissions_data)
           # The row had GHG emissions attributes (e.g Scope 1) but no numerical
           # value for the amount.
