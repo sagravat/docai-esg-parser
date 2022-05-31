@@ -19,6 +19,14 @@ def _is_number(s):
   except ValueError:
     return False
 
+def get_unit(text: str) -> Tuple[str, bool]:
+  lower = text.lower()
+  if "metric" in lower:
+    return text[lower.index("metric"):], True
+  elif "mtco" in lower:
+    return text[lower.index("mtco"):], True
+
+  return "", False
 
 def is_year_column(text: str) -> bool:
   """Check if the columnn header corresponds to the year."""
@@ -60,7 +68,7 @@ def _get_cell_text(cell, text) -> str:
   return ''.join(parts).strip()
 
 
-def _log_results(file_path: str, ghg_emissions_data: Dict[str, str]):
+def _log_results(file_path: str, ghg_emissions_data: Dict[str, str], unit: str):
   """Output the fields in tab delimeted format."""
   sector, filename = file_path.split('/')[-2:]
   company = filename.split('.pdf')[0]
@@ -68,7 +76,7 @@ def _log_results(file_path: str, ghg_emissions_data: Dict[str, str]):
     temp_od = ghg_emissions_data[category]
     for year in temp_od.keys():
       val = temp_od[year].replace('\n', ' ')
-      print(f'{sector}\t{company}\t{category}\t{year}\t{val}')
+      print(f'{sector}\t{company}\t{category}\t{year}\t{val}\t{unit}')
 
 
 def _parse_extracted_cols(
@@ -79,7 +87,6 @@ def _parse_extracted_cols(
   category = matching_keywords_str
   ordered_data = collections.OrderedDict()
   ghg_emissions_data = {}
-
   for item in cols:
     field_value = item['fieldValue'].replace(',', '')
     if field_value.isdigit() or _is_number(field_value):
@@ -108,17 +115,24 @@ def process_tabular_data(document: documentai.Document, file_path: str,
   for page in document.pages:
     has_any_keyword = False
     for table in page.tables:
+      unit = "N/A"
       cols = []
       header = table.header_rows[0]
       for cell in header.cells:
-        cols.append(_get_cell_text(cell, text))
+        cell_text = _get_cell_text(cell, text)
+        cols.append(cell_text)
+        value, ok = get_unit(cell_text)
+        if ok:
+          unit = value
 
       for row in table.body_rows:
         has_any_keyword = False
         extracted_cols = []
         matching_keywords_str = ""
         for i, cell in enumerate(row.cells):
-          cell_text = _get_cell_text(row.cells[i], text)
+
+          cell_text = _get_cell_text(cell, text)
+
           matching_keywords = _get_matching_keywords(cell_text.lower(), keywords)
           if matching_keywords:
             matching_keywords_str = ", ".join(matching_keywords)
@@ -134,7 +148,7 @@ def process_tabular_data(document: documentai.Document, file_path: str,
           # print("yes: ", extracted_cols)
           has_numeric_value, ghg_emissions_data = _parse_extracted_cols(
               extracted_cols, matching_keywords_str)
-          _log_results(file_path, ghg_emissions_data)
+          _log_results(file_path, ghg_emissions_data, unit)
           # The row had GHG emissions attributes (e.g Scope 1) but no numerical
           # value for the amount.
           if not has_numeric_value:
